@@ -3,6 +3,7 @@ import argparse
 import csv
 import io
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -106,24 +107,25 @@ def main():
     if args.symbols:
         cs = [c for c in cs if c["symbol"] in args.symbols] or [{"symbol": s, "name": s, "market_cap": 0, "industry": ""} for s in args.symbols]
     write_csv(DATA / "companies.csv", cs, "symbol")
+    manifest, lock = DATA / "filings.csv", threading.Lock()
 
-    def listing(c):
+    def company(c):
+        """List and download one company's filings, then append them to the manifest so a killed run loses nothing."""
         try:
-            rows = list(filings(c["symbol"], args.since))
+            rows = [fetch(r) for r in filings(c["symbol"], args.since)]
         except Exception as e:
-            print(f"{c['symbol']:6} listing error: {e}", file=sys.stderr)
+            print(f"{c['symbol']:6} error: {e}", file=sys.stderr)
             return []
-        print(f"{c['symbol']:6} {len(rows)} filings", file=sys.stderr)
+        with lock:
+            write_csv(manifest, rows, "document_key")
+        print(f"{c['symbol']:6} {len(rows)} filings, {sum(r['status'] != 'ok' for r in rows)} failed", file=sys.stderr, flush=True)
         return rows
 
-    with ThreadPoolExecutor(4) as ex:
-        todo = [r for rows in ex.map(listing, cs) for r in rows]
     with ThreadPoolExecutor(args.workers) as ex:
-        rows = list(ex.map(fetch, todo))
-    write_csv(DATA / "filings.csv", rows, "document_key")
+        rows = [r for rs in ex.map(company, cs) for r in rs]
     ok = [r for r in rows if r["status"] == "ok"]
     by_kind = {k: sum(r["kind"] == k for r in ok) for _, k in KINDS}
-    print(f"{len(ok)}/{len(rows)} filings downloaded {by_kind}, {sum(r['scanned'] for r in ok)} scanned -> {DATA / 'filings.csv'}", file=sys.stderr)
+    print(f"{len(ok)}/{len(rows)} filings downloaded {by_kind}, {sum(r['scanned'] for r in ok)} scanned -> {manifest}", file=sys.stderr)
 
 
 if __name__ == "__main__":
