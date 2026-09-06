@@ -1,0 +1,6 @@
+[project]
+name = "asx-holder-financing"
+version = "0.1.0"
+description = "Find ASX directors and substantial holders who financed or hedged their shareholding with a bank, and rank who is likely to next"
+requires-python = ">=3.12"
+dependencies = ["anthropic>=1.0", "pandas>=2.2", "pydantic>=2", "pymupdf>=1.24", "requests>=2.31", "scikit-learn>=1.5"]
