@@ -42,6 +42,7 @@ def load():
     directors = directors.merge(seen[seen.form == "3Z"].groupby("key").filing_date.min().rename("ceased"), on="key", how="left")
     events = events[events.kind.isin(FINANCING_KINDS) & events.confidence.isin(["high", "medium"])].copy()
     events["key"] = link(events, holdings)
+    events = events.assign(month=events.filing_date.dt.to_period("M")).drop_duplicates(["key", "month"])  # one transaction usually surfaces in several filings
     return holdings, changes, events, directors
 
 
